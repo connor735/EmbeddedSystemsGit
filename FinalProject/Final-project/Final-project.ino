@@ -3,7 +3,7 @@
 
 #define TRIG_PIN 4
 #define ECHO_PIN 5
-#define MICROPHONE_OUT_PIN 19
+#define MICROPHONE_OUT_PIN 38
 #define SOUND_SPEED 343
 /// @brief GPIO pin connected to the LED.
 #define LED_PIN 20
