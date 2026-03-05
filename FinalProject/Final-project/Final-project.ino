@@ -3,8 +3,9 @@
 
 #define TRIG_PIN 4
 #define ECHO_PIN 5
-#define MICROPHONE_OUT_PIN 19
+#define MICROPHONE_OUT_PIN 38
 #define SOUND_SPEED 343
+
 /// @brief GPIO pin connected to the LED.
 #define LED_PIN 20
 /// @brief I2C data pin
@@ -121,13 +122,13 @@ void getDistance(void* arg) {
 void handleClap(void* arg) {
   if (MODE != CLAP_MODE) return;
 
-  unsigned long currentClap = micros()
-  unsigned long millisDifference = (currentClap - previousClap) / 1000.0
+  unsigned long currentClap = micros();
+  unsigned long millisDifference = (currentClap - previousClap) / 1000.0;
 
   // BPM ranges between 30 and 200
   if (millisDifference > 300 && millisDifference < 2000) {
-    previousClap = currentClap
-    currentBPM = 60000 / millisDifference
+    previousClap = currentClap;
+    currentBPM = 60000 / millisDifference;
     Serial.println(currentBPM);
     Serial.println("test");
   }
@@ -160,7 +161,7 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
 
-  attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, RISING);
+  attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
 }
 
 void loop() {
