@@ -37,6 +37,8 @@ volatile float uDistance = 20.0;
 volatile unsigned long previousClap;
 volatile unsigned int currentBPM;
 volatile unsigned int MODE = CLAP_MODE;
+volatile bool clapDetected = false;
+
 /**
 * @brief Sends a 4 bit data packet to the LCD
 * 
@@ -119,19 +121,24 @@ void getDistance(void* arg) {
   uDistance = (duration * SOUND_SPEED / 2.0) * 0.0001;
 }
 
-void handleClap(void* arg) {
+void IRAM_ATTR handleClap() {
   if (MODE != CLAP_MODE) return;
 
   unsigned long currentClap = micros();
-  unsigned long millisDifference = (currentClap - previousClap) / 1000.0;
+  // Using 1000ULL (Unsigned Long Long) to force integer math
+  unsigned long millisDifference = (currentClap - previousClap) / 1000ULL;
 
-  // BPM ranges between 30 and 200
-  if (millisDifference > 300 && millisDifference < 2000) {
-    previousClap = currentClap;
-    currentBPM = 60000 / millisDifference;
-    Serial.println(currentBPM);
-    Serial.println("test");
+  if (millisDifference < 300) {
+    return; // Debounce: ignore too-fast triggers
   }
+
+  if (millisDifference <= 2000) {
+    currentBPM = 60000 / millisDifference;
+    clapDetected = true;
+  }
+  
+  // Always update previousClap so the next difference is calculated from THIS clap
+  previousClap = currentClap;
 }
 
 void updateLCD(void* arg) {
@@ -146,14 +153,14 @@ void updateLCD(void* arg) {
 
 void setup() {
   Serial.begin(115200);
+  
+  // Initialize timing variable
+  previousClap = micros();
 
-  // Initialise the data and clock pins
   Wire.begin(SDA_PIN, SCL_PIN);
-  // Initialize LCD and add backlight
   lcd.init();
   lcd.backlight();
 
-  // Set led pin mode to output and send a low signal to turn it off
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
 
@@ -161,6 +168,7 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
 
+  // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
 }
 
@@ -170,6 +178,12 @@ void loop() {
   Serial.print("Distance: ");
   Serial.print(uDistance);
   Serial.println(" cm");
+
+  if (clapDetected) {
+    Serial.print("BPM : ");
+    Serial.println(currentBPM);
+    clapDetected = false;
+  }
 
   delay(500);
 }
