@@ -129,6 +129,7 @@ void handleClap(void* arg) {
     previousClap = currentClap
     currentBPM = 60000 / millisDifference
     Serial.println(currentBPM);
+    Serial.println("test");
   }
 }
 
