@@ -5,6 +5,7 @@
 #define ECHO_PIN 5
 #define MICROPHONE_OUT_PIN 38
 #define SOUND_SPEED 343
+#define BUZZER_PIN 19
 
 /// @brief GPIO pin connected to the LED.
 #define LED_PIN 20
@@ -102,6 +103,8 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
+  
+  ledcAttach(buzzerPin, LOW_FREQUENCY, RESOLUTION);
 
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
