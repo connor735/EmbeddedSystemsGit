@@ -39,65 +39,6 @@ volatile unsigned int currentBPM;
 volatile unsigned int MODE = CLAP_MODE;
 volatile bool clapDetected = false;
 
-/**
-* @brief Sends a 4 bit data packet to the LCD
-* 
-* The function sends a data packet to the LCD. It sets enable 
-* HIGH to signal that data or a command is incoming, then LOW 
-* for the LCD device to process it.
-*
-* @param data the 4 bit data to send
-*/
-void lcdTransmission(uint8_t data) {
-  Wire.beginTransmission(LCD_ADDR);
-  Wire.write(data | ENABLE);
-  Wire.endTransmission();
-  // Delay to ensure correct transmission
-  delay(10);
-  Wire.beginTransmission(LCD_ADDR);
-  Wire.write(data & ~ENABLE);
-  Wire.endTransmission();
-}
-
-/**
-* @brief Splits a character in two data packets, then sends them
-* 
-* @param c the character to send
-*/
-void sendChar(char c) {
-  // Add backlight and put in data mode
-  uint8_t highChar = (c & 0xF0) | BACKLIGHT | DATA_MODE;
-  uint8_t lowChar = ((c << 4) & 0xF0) | BACKLIGHT | DATA_MODE;
-  lcdTransmission(highChar);
-  lcdTransmission(lowChar);
-}
-
-/**
-* @brief Splits a command in two data packets, then sends them
-* 
-* @param c the command to send
-*/
-void sendCmd(uint8_t c) {
-  // Add backlight and put in command mode
-  uint8_t highCmd = (c & 0xF0) | BACKLIGHT | CMD_MODE;
-  uint8_t lowCmd = ((c << 4) & 0xF0) | BACKLIGHT | CMD_MODE;
-  lcdTransmission(highCmd);
-  lcdTransmission(lowCmd);
-}
-
-/**
-* @brief Splits a String into characters, then sends each character
-* 
-* @param str the string to send
-*/
-void sendString(String str) {
-  // Send each character one by one
-  for (int i = 0; i < str.length(); i++) {
-    char c = str.charAt(i);
-    sendChar(c);
-  }
-}
-
 void displayLCD(String s1, String s2) {
   lcd.setCursor(0, 0);
   sendString(s1);
