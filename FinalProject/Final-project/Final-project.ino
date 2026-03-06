@@ -86,6 +86,16 @@ void updateLCD(void* arg) {
 
 }
 
+//ir receiver code
+void irReciever(void* arg){
+
+}
+
+// buzzer code 
+void buzz(void* arg){
+
+}
+
 void setup() {
   Serial.begin(115200);
   
