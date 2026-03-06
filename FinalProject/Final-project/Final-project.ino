@@ -39,12 +39,6 @@ volatile unsigned int currentBPM;
 volatile unsigned int MODE = CLAP_MODE;
 volatile bool clapDetected = false;
 
-void displayLCD(String s1, String s2) {
-  lcd.setCursor(0, 0);
-  sendString(s1);
-  lcd.setCursor(0, 1);
-  sendString(s2);
-}
 
 
 void getDistance(void* arg) {
