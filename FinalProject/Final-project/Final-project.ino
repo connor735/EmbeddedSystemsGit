@@ -30,31 +30,56 @@
 #define KEY_MODE 2
 #define VOLUME_MODE 3
 #define RESET_MODE 0
+#define BUZZER_PIANO_MODE 0
+#define BUZZER_SYNTH_MODE 1
+#define RESOLUTION 8
 
 /// @brief LCD object configured using I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-/// @brief Distance from ultrasonic sensor to object 
-volatile float uDistance = 20.0;
+
 volatile unsigned long previousClap;
 volatile unsigned int currentBPM;
 volatile unsigned int MODE = CLAP_MODE;
 volatile bool clapDetected = false;
 
+volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
+volatile unsigned int frequency = 1000;
+volatile unsigned int volume = 127;
 
+const TickType_t distanceFrequency = pdMS_TO_TICKS(20);
+
+// Queue handling to send data between tasks
+QueueHandle_t distanceQueue;
+
+// C4, D4, E4, F4, G4, A4, B4, C5
+const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
 
 void getDistance(void* arg) {
-  // We send the trigger
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
+  TickType_t lastLoop = xTaskGetTickCount();
+  for(;;) {
+    // We send the trigger
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
 
-  // Measure echo
-  long duration = pulseIn(ECHO_PIN, HIGH);
+    // Measure echo
+    long duration = pulseIn(ECHO_PIN, HIGH, 15000);
 
-  // Convert to distance in centimeters and store
-  uDistance = (duration * SOUND_SPEED / 2.0) * 0.0001;
+    // Convert to distance in centimeters and store
+    float distance = (duration * SOUND_SPEED / 2.0) * 0.0001;
+
+    if (duration == 0) {
+      // If no pulse detected we say that the object is very far way
+      distance = 999.0;
+    }
+
+    xQueueSend(distanceQueue, &distance, 0);
+
+    // We wait until 10 ms passsed since it last started
+    vTaskDelayUntil(&lastLoop, distanceFrequency);
+  }
 }
 
 void IRAM_ATTR handleClap() {
@@ -94,6 +119,28 @@ void irReciever(void* arg){
 
 // buzzer code 
 void buzz(void* arg){
+  ledcAttach(BUZZER_PIN, frequency, RESOLUTION);
+  float receivedDistance;
+
+  for(;;) {
+    // Wait until you receive the next distance measurement
+    if (xQueueReceive(distanceQueue, &receivedDistance, portMAX_DELAY)) {
+      if (receivedDistance > 4 && receivedDistance < 40) {
+        if (buzzerMode == BUZZER_PIANO_MODE) {
+          frequency = pianoScale[map(receivedDistance, 4, 40, 0, 7)];
+        } else {
+          frequency = map(receivedDistance, 4, 40, 262, 523);
+        }
+        Serial.print("Frequency : ");
+        Serial.println(frequency);
+        ledcChangeFrequency(BUZZER_PIN, frequency, RESOLUTION);
+        ledcWrite(BUZZER_PIN, volume);
+      } else {
+        // Stop the sound
+        ledcWrite(BUZZER_PIN, 0);
+      }
+    }
+  }
 
 }
 
@@ -113,25 +160,19 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
-  
-  ledcAttach(buzzerPin, LOW_FREQUENCY, RESOLUTION);
 
+  distanceQueue = xQueueCreate(5, sizeof(float));
+
+  // We pin the distance task to core 0 for high speed
+  xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, NULL, 0);
+
+  // Pin to core 1 because it is not as sensitive as the distnce measurement
+  xTaskCreatePinnedToCore(buzz, "BuzzTask", 2048, NULL, 1, NULL, 1);  
+  
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
 }
 
 void loop() {
-  getDistance(NULL);
 
-  Serial.print("Distance: ");
-  Serial.print(uDistance);
-  Serial.println(" cm");
-
-  if (clapDetected) {
-    Serial.print("BPM : ");
-    Serial.println(currentBPM);
-    clapDetected = false;
-  }
-
-  delay(500);
 }
