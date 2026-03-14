@@ -28,7 +28,6 @@
 
 #define CLAP_MODE 1
 #define KEY_MODE 2
-#define VOLUME_MODE 3
 #define RESET_MODE 0
 #define BUZZER_PIANO_MODE 0
 #define BUZZER_SYNTH_MODE 1
@@ -39,11 +38,9 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 volatile unsigned long previousClap;
 volatile unsigned int currentBPM;
-volatile unsigned int MODE = KEY_MODE;
-volatile bool clapDetected = false;
+volatile unsigned int MODE = CLAP_MODE;
 
 volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
-volatile unsigned int volume = 20;
 
 const TickType_t distanceFrequency = pdMS_TO_TICKS(20);
 
@@ -51,17 +48,19 @@ const TickType_t distanceFrequency = pdMS_TO_TICKS(20);
 QueueHandle_t distanceQueue;
 QueueHandle_t bpmQueue;
 QueueHandle_t frequencyQueue;
-QueueHandle_t volumeQueue;
 
 // C4, D4, E4, F4, G4, A4, B4, C5
 const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
 const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 
+volatile uint32_t lastInterruptTime = 0;
+volatile bool clapDetected = false;
+
 void getDistance(void* arg) {
   TickType_t lastLoop = xTaskGetTickCount();
 
   for(;;) {
-    if (MODE == KEY_MODE || MODE == VOLUME_MODE) {
+    if (MODE == KEY_MODE) {
       // We send the trigger
       digitalWrite(TRIG_PIN, LOW);
       delayMicroseconds(2);
@@ -91,26 +90,28 @@ void getDistance(void* arg) {
 void IRAM_ATTR handleClap() {
   if (MODE != CLAP_MODE) return;
 
-  unsigned long currentClap = micros();
+  clapDetected = true;
+
+  // unsigned long currentClap = 10;
   
-  unsigned long millisDifference = (currentClap - previousClap) / 1000ULL;
+  // unsigned long millisDifference = (currentClap - previousClap) / 1000;
 
-  if (millisDifference < 300) return;
+  // if (millisDifference < 300) return;
 
-  if (millisDifference <= 2000) {
-    currentBPM = 60000 / millisDifference;
-    clapDetected = true;
-  }
-  previousClap = currentClap;
+  // if (millisDifference <= 2000) {
+  //   currentBPM = 60000 / millisDifference;
+  // }
+  // previousClap = currentClap;
 
-  xQueueSendFromISR(bpmQueue, (void*) &currentBPM, NULL);
+  // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  // xQueueSendFromISR(bpmQueue, (void*) &currentBPM, &xHigherPriorityTaskWoken);
+  // if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
 }
 
 void updateLCD(void* arg) {
-  int tempFreq, tempBPM, tempVolume;
-  int receivedFreq;
-  int receivedBPM;
-  int receivedVolume;
+  int tempFreq, tempBPM;
+  int receivedFreq = 262;
+  int receivedBPM = 0;
 
   for (;;) {
     bool update = false;
@@ -125,11 +126,6 @@ void updateLCD(void* arg) {
       update = true;
     }
 
-    while (xQueueReceive(volumeQueue, &tempVolume, 0) == pdPASS) {
-      receivedVolume = tempVolume;
-      update = true;
-    }
-
     if (update) {
       String s1 = "";
       String s2 = "";
@@ -139,11 +135,9 @@ void updateLCD(void* arg) {
         s2 = String("Current BPM: ") + String(receivedBPM);
       } else if (MODE == KEY_MODE) {
         int index = map(receivedFreq, 262, 523, 0, 7);
+        index = constrain(index, 0, 7);
         s1 = String("Key mode");
         s2 = String("Key : ") + keyScale[index];
-      } else if (MODE == VOLUME_MODE) {
-        s1 = String("Volume mode");
-        s2 = String("Volume : ") + String(receivedVolume);
       }
       
       lcd.clear();
@@ -164,16 +158,52 @@ void irReciever(void* arg){
 
 // buzzer code 
 void buzz(void* arg){
+  uint8_t clapEvent;
+  uint32_t previousClapTime = 0;
+
   int frequency = 400;
   float receivedDistance;
   int oldFrequency = 0;
-  int oldVolume = 0;
-  ledcAttach(BUZZER_PIN, frequency, RESOLUTION);
+  TickType_t lastBeatTime = xTaskGetTickCount();
+
+  ledcAttach(BUZZER_PIN, frequency, 6);
 
   for(;;) {
-    // Wait until you receive the next distance measurement
-    if (xQueueReceive(distanceQueue, &receivedDistance, portMAX_DELAY)) {
-      if (MODE == KEY_MODE) {
+    if (clapDetected) {
+      clapDetected = false;
+      uint32_t clapTime = millis();
+      uint32_t diff = clapTime - previousClapTime;
+
+      Serial.print("Diff : ");
+      Serial.println(diff);
+
+      if (diff > 300 && diff < 2000) {
+          currentBPM = 60000 / diff;
+      }
+
+      previousClapTime = clapTime;
+      int bpm = currentBPM;
+      Serial.println(bpm);
+      xQueueSend(bpmQueue, &bpm, 0);
+    }
+
+    if (MODE == CLAP_MODE) {
+      if (currentBPM > 0) {
+        int interval = 60000/currentBPM;
+
+        ledcChangeFrequency(BUZZER_PIN, 150, 6);
+        ledcWrite(BUZZER_PIN, 127);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        ledcWrite(BUZZER_PIN, 0);
+        vTaskDelayUntil(&lastBeatTime, pdMS_TO_TICKS(interval));
+      } else {
+        vTaskDelay(100);
+        // Reset timer
+        lastBeatTime = xTaskGetTickCount();
+      }
+    } else if (MODE == KEY_MODE) {
+      // Wait until you receive the next distance measurement
+      if (xQueueReceive(distanceQueue, &receivedDistance, pdMS_TO_TICKS(20))) {
         if (receivedDistance > 4 && receivedDistance < 40) {
           if (buzzerMode == BUZZER_PIANO_MODE) {
             frequency = pianoScale[map(receivedDistance, 4, 40, 0, 7)];
@@ -182,7 +212,7 @@ void buzz(void* arg){
           }
 
           ledcChangeFrequency(BUZZER_PIN, frequency, RESOLUTION);
-          ledcWrite(BUZZER_PIN, volume);
+          ledcWrite(BUZZER_PIN, 127);
 
           // If the frequency changes enough, we update the  lcd
           if (abs(oldFrequency - frequency) > 10) {
@@ -195,6 +225,8 @@ void buzz(void* arg){
           ledcWrite(BUZZER_PIN, 0);
         }
       }
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -218,7 +250,6 @@ void setup() {
   distanceQueue = xQueueCreate(5, sizeof(float));
   bpmQueue = xQueueCreate(5, sizeof(int));
   frequencyQueue = xQueueCreate(5, sizeof(int));
-  volumeQueue = xQueueCreate(5, sizeof(int));
 
   lcd.setBacklight(1);
 
@@ -226,10 +257,10 @@ void setup() {
   xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, NULL, 0);
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
-  xTaskCreatePinnedToCore(buzz, "BuzzTask", 2048, NULL, 1, NULL, 1);  
+  xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
-  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 2048, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, NULL, 1);
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
