@@ -168,7 +168,7 @@ void updateLCD(void* arg) {
 
 //ir receiver code
 void irReciever(void* arg){
-  
+  while(1){
   if (irRemote.decode(&results)) {
 
     
@@ -178,6 +178,8 @@ void irReciever(void* arg){
 
     irRemote.resume();
 
+  }
+  vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 
