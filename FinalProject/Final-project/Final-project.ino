@@ -1,6 +1,11 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRutils.h>
 
+
+#define IR_RECEIVER_PIN 3
 #define TRIG_PIN 4
 #define ECHO_PIN 5
 #define MICROPHONE_OUT_PIN 38
@@ -33,6 +38,10 @@
 #define BUZZER_PIANO_MODE 0
 #define BUZZER_SYNTH_MODE 1
 #define RESOLUTION 8
+
+/// @brief ir remote initialization
+IRrecv irRemote(IR_RECEIVER_PIN);
+decode_results results;
 
 /// @brief LCD object configured using I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -159,11 +168,21 @@ void updateLCD(void* arg) {
 
 //ir receiver code
 void irReciever(void* arg){
+  
+  if (irRemote.decode(&results)) {
 
+    
+
+    Serial.print("Button HEX: 0x");
+    Serial.println(results.value, HEX);
+
+    irRemote.resume();
+
+  }
 }
 
 // buzzer code 
-void buzz(void* arg){
+void buzz(void* arg) {
   int frequency = 400;
   float receivedDistance;
   int oldFrequency = 0;
@@ -195,11 +214,16 @@ void buzz(void* arg){
           ledcWrite(BUZZER_PIN, 0);
         }
       }
+   }
   }
 }
 
+
 void setup() {
   Serial.begin(115200);
+
+  // start ir remote
+  irRemote.enableIRIn();
   
   // Initialize timing variable
   previousClap = micros();
@@ -214,6 +238,7 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
+  pinMode(IR_RECEIVER_PIN, INPUT);
 
   distanceQueue = xQueueCreate(5, sizeof(float));
   bpmQueue = xQueueCreate(5, sizeof(int));
@@ -230,6 +255,9 @@ void setup() {
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 2048, NULL, 1, NULL, 1);
+
+  // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
+  xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
