@@ -285,7 +285,7 @@ void buzz(void* arg){
           // // Stop the sound
           // ledcWrite(BUZZER_PIN, 0);
 
-          ledcChangeFrequency(BUZZER_PIN, 150, 8);
+          ledcChangeFrequency(BUZZER_PIN, 200, 8);
           ledcWrite(BUZZER_PIN, 127);
           vTaskDelay(pdMS_TO_TICKS(50));
           ledcWrite(BUZZER_PIN, 0);
