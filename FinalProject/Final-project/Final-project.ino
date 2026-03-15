@@ -391,14 +391,14 @@ void setup() {
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
 
   // turn on + configure timer 1
-  timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
+  timer1 = timerBegin(50000);              
   timerAttachInterrupt(timer1, &onTimer1);
-  timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
+  timerAlarm(timer1, 1000, true, 0);      // timer for task running a 50Hz
 
   // turn on + configure LCD timer
-  lcdTimer = timerBegin(1000);              // 20 Hz timer = 50 ms period
+  lcdTimer = timerBegin(1000);              // 
   timerAttachInterrupt(lcdTimer, &onLcdTimer);
-  timerAlarm(lcdTimer, 50, true, 0);       // interrupt every timer tick
+  timerAlarm(lcdTimer, 31, true, 0);       // timer for task running at 32Hz
 
   ledcAttach(BUZZER_PIN, 1000, 8);
 
