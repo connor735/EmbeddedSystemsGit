@@ -65,10 +65,23 @@ const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 volatile uint32_t lastInterruptTime = 0;
 volatile bool clapDetected = false;
 
+// timer1 variables
+hw_timer_t *timer1 = NULL;
+TaskHandle_t distanceTaskHandle = NULL;
+
+// timer1 interrupt to run get distance
+void IRAM_ATTR onTimer1() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+
 void getDistance(void* arg) {
-  TickType_t lastLoop = xTaskGetTickCount();
 
   for(;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     if (MODE == KEY_MODE) {
       // We send the trigger
       digitalWrite(TRIG_PIN, LOW);
@@ -90,9 +103,6 @@ void getDistance(void* arg) {
 
       xQueueSend(distanceQueue, &distance, 0);
     }
-
-    // We wait until 10 ms passsed since it last started
-    vTaskDelayUntil(&lastLoop, distanceFrequency);
   }
 }
 
@@ -281,7 +291,7 @@ void buzz(void* arg){
 void setup() {
   Serial.begin(115200);
 
-  // start ir remote
+  // enable ir remote
   irRemote.enableIRIn();
   
   // Initialize timing variable
@@ -306,7 +316,7 @@ void setup() {
   lcd.setBacklight(1);
 
   // We pin the distance task to core 0 for high speed
-  xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, &distanceTaskHandle, 0);
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
@@ -316,6 +326,11 @@ void setup() {
 
   // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
+
+  // turn on + configure timer 1
+  timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
+  timerAttachInterrupt(timer1, &onTimer1);
+  timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
