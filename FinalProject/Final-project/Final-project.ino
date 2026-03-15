@@ -372,7 +372,7 @@ void setup() {
   timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
 
   // turn on + configure LCD timer
-  lcdTimer = timerBegin(20);              // 20 Hz timer = 50 ms period
+  lcdTimer = timerBegin(64);              // 20 Hz timer = 50 ms period
   timerAttachInterrupt(lcdTimer, &onLcdTimer);
   timerAlarm(lcdTimer, 1, true, 0);       // interrupt every timer tick
 
