@@ -63,6 +63,9 @@ volatile unsigned int currentBPM;
 volatile unsigned int MODE = CLAP_MODE;
 volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
 
+/// @brief irUpdate signal
+volatile bool irUpdate = false;
+
 /// @brief Queue handling to send data between tasks
 QueueHandle_t distanceQueue;
 QueueHandle_t bpmQueue;
@@ -160,7 +163,7 @@ void updateLCD(void* arg) {
       update = true;
     }
 
-    if (update) {
+    if (update||irUpdate) {
       String s1 = "";
       String s2 = "";
 
@@ -192,16 +195,21 @@ void irReciever(void* arg){
 
       if(results.value == 0xFFA25D){ // if 1 pressed then enter clap mode
         MODE = CLAP_MODE;
+        irUpdate = true;
       } else if(results.value == 0xFF9867){ // if 0 pressed then enter reset mode
         MODE = RESET_MODE;
+        irUpdate = true;
       } else if(results.value == 0xFF629D){ //if 2 pressed then enter Key mode
         MODE = KEY_MODE;
+        irUpdate = true;
       }
 
-      if(MODE == KEY_MODE && results.value == 0xFF10EF){ //if in key mode and press left arrow then enter piano mode
+      if(MODE == KEY_MODE && results.value == 0xFF38C7){ //if in key mode and ok pressed then enter piano mode
         buzzerMode = BUZZER_PIANO_MODE;
-      } else if(MODE == KEY_MODE && results.value == 0xFF5AA5){ // if in key mode and press right arrow then enter synth mode
+        irUpdate = true;
+      } else if(MODE == KEY_MODE && results.value == 0xFF38C7){ // if in key mode and ok pressed then enter synth mode
         buzzerMode = BUZZER_SYNTH_MODE;
+        irUpdate = true;
       }
 
       irRemote.resume();
@@ -210,24 +218,7 @@ void irReciever(void* arg){
   vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
-//key for ir receiver values
-// 1 - 0xFFA25D
-// 2 - 0xFF629D
-// 3 - 0xFFE21D
-// 4 - 0xFF22DD
-// 5 - 0xFF02FD
-// 6 - 0xFFC23D
-// 7 - 0xFFE01F
-// 8 - 0xFFA857
-// 9 - 0xFF906F
-// 0 - 0xFF9867
-// * - 0xFF6897
-// # - 0xFFB04F
-// up arrorw - 0xFF18E7
-// down - 0xFF4AB5
-// left - 0xFF10EF
-// right - 0xFF5AA5
-// ok - 0xFF38C7
+
 
 // buzzer code 
 void buzz(void* arg){
