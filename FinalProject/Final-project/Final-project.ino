@@ -31,8 +31,7 @@
 /// @brief I2C address of the LCD module
 #define LCD_ADDR 0x27
 
-/// @brief Macros for bitwise operations
-/// @brief Bit mask to enable data transmission of the LCD
+/// @brief Macros for bitwise operations, Bit mask to enable data transmission of the LCD
 #define ENABLE 0x04
 /// @brief Bit mask to enable backlight of the LCD
 #define BACKLIGHT 0x08
@@ -86,7 +85,13 @@ hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
 
 
-// timer1 interrupt to run get distance
+/**
+* @brief interrupt triggered by hardware timer
+*
+* This interrupt is triggered every 20ms by the hardware timer(timer1)
+* It tells the freeRTOS, get distance task to run
+* no returns and no parameters
+*/
 void IRAM_ATTR onTimer1() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
@@ -95,6 +100,13 @@ void IRAM_ATTR onTimer1() {
   }
 }
 
+/**
+* @brief gets the distance measured by the ultrasonic distance sensor
+*
+* When triggered by the interrupt, every 20 ms, it gets the distance from the ultrasonic sensor
+* This data is then sent to a queue for buzz and updateLCD functions
+* Returns nothing, pointers to arguments not used
+*/
 void getDistance(void* arg) {
 
   for(;;) {
