@@ -146,13 +146,15 @@ void IRAM_ATTR handleClap() {
 }
 
 void updateLCD(void* arg) {
+  static String prevS1 = "";
+  static String prevS2 = "";
+
   int tempFreq, tempBPM;
   int receivedFreq = 262;
   int receivedBPM = 0;
+  bool update = true;
 
   for (;;) {
-    bool update = false;
-
     while (xQueueReceive(frequencyQueue, &tempFreq, 0) == pdPASS) {
       receivedFreq = tempFreq;
       update = true;
@@ -163,7 +165,7 @@ void updateLCD(void* arg) {
       update = true;
     }
 
-    if (update||irUpdate) {
+    if (update || irUpdate) {
       String s1 = "";
       String s2 = "";
 
@@ -173,15 +175,25 @@ void updateLCD(void* arg) {
       } else if (MODE == KEY_MODE) {
         int index = map(receivedFreq, 262, 523, 0, 7);
         index = constrain(index, 0, 7);
-        s1 = String("Key mode - ") + ((MODE == BUZZER_PIANO_MODE) ? String("Piano") : String("Synth"));
+        s1 = String("Key mode - ") + ((buzzerMode == BUZZER_PIANO_MODE) ? String("Piano") : String("Synth"));
         s2 = String("Key : ") + keyScale[index];
       }
       
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print(s1);
-      lcd.setCursor(0, 1);
-      lcd.print(s2);
+      if (s1 != prevS1) {
+        lcd.setCursor(0, 0);
+        lcd.print(s1);
+        for (int i = s1.length(); i < 16; i++) lcd.print(" ");
+        prevS1 = s1;
+      }
+      if (s2 != prevS2) {
+        lcd.setCursor(0, 1);
+        lcd.print(s2);
+        for (int i = s2.length(); i < 16; i++) lcd.print(" ");
+        prevS2 = s2;
+      }
+
+      update = false;
+      irUpdate = false;
     }
 
     vTaskDelay(pdMS_TO_TICKS(200));
@@ -355,6 +367,10 @@ void setup() {
   timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
 
   ledcAttach(BUZZER_PIN, 1000, 8);
+
+  currentBPM = 120;
+  int defaultBPM = currentBPM;
+  xQueueSend(bpmQueue, &defaultBPM, 0);
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
