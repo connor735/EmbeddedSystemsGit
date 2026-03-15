@@ -165,10 +165,19 @@ void irReciever(void* arg){
   while(1){
   if (irRemote.decode(&results)) {
 
-    
-    
-    Serial.print("Button HEX: 0x");
-    Serial.println(results.value, HEX);
+    if(results.value == 0xFFA25D){ // if 1 pressed then enter clap mode
+      MODE = CLAP_MODE;
+    } else if(results.value == 0xFF9867){ // if 0 pressed then enter reset mode
+      MODE = RESET_MODE;
+    } else if(results.value == 0xFF629D){ //if 2 pressed then enter Key mode
+      MODE = KEY_MODE;
+    }
+
+    if(MODE == KEY_MODE && results.value == 0xFF10EF){ //if in key mode and press left arrow then enter piano mode
+      buzzer_mode = BUZZER_PIANO_MODE;
+    } else if(MODE == KEY_MODE && results.value == 0xFF5AA5){ // if in key mode and press right arrow then enter synth mode
+      buzzer_mode = BUZZER_SYNTH_MODE;
+    }
 
     irRemote.resume();
 
