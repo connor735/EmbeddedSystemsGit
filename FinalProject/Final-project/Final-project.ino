@@ -168,7 +168,7 @@ void updateLCD(void* arg) {
       String s2 = "";
 
       if (MODE == CLAP_MODE) {
-        s1 = String("BPM mode");
+        s1 = String("Metronome mode");
         s2 = String("Current BPM: ") + String(receivedBPM);
       } else if (MODE == KEY_MODE) {
         int index = map(receivedFreq, 262, 523, 0, 7);
