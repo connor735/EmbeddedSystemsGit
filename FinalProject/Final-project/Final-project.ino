@@ -68,10 +68,23 @@ volatile bool clapDetected = false;
 hw_timer_t *beatTimer = NULL;
 volatile bool beatFlag = false;
 
+// timer1 variables
+hw_timer_t *timer1 = NULL;
+TaskHandle_t distanceTaskHandle = NULL;
+
+// timer1 interrupt to run get distance
+void IRAM_ATTR onTimer1() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+
 void getDistance(void* arg) {
-  TickType_t lastLoop = xTaskGetTickCount();
 
   for(;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     if (MODE == KEY_MODE) {
       // We send the trigger
       digitalWrite(TRIG_PIN, LOW);
@@ -93,9 +106,6 @@ void getDistance(void* arg) {
 
       xQueueSend(distanceQueue, &distance, 0);
     }
-
-    // We wait until 10 ms passsed since it last started
-    vTaskDelayUntil(&lastLoop, distanceFrequency);
   }
 }
 
@@ -160,14 +170,25 @@ void updateLCD(void* arg) {
 //ir receiver code
 void irReciever(void* arg){
   while(1){
-  if (irRemote.decode(&results)) {    
-    
-    Serial.print("Button HEX: 0x");
-    Serial.println(results.value, HEX);
+    if (irRemote.decode(&results)) {
 
-    irRemote.resume();
+      if(results.value == 0xFFA25D){ // if 1 pressed then enter clap mode
+        MODE = CLAP_MODE;
+      } else if(results.value == 0xFF9867){ // if 0 pressed then enter reset mode
+        MODE = RESET_MODE;
+      } else if(results.value == 0xFF629D){ //if 2 pressed then enter Key mode
+        MODE = KEY_MODE;
+      }
 
-  }
+      if(MODE == KEY_MODE && results.value == 0xFF10EF){ //if in key mode and press left arrow then enter piano mode
+        buzzerMode = BUZZER_PIANO_MODE;
+      } else if(MODE == KEY_MODE && results.value == 0xFF5AA5){ // if in key mode and press right arrow then enter synth mode
+        buzzerMode = BUZZER_SYNTH_MODE;
+      }
+
+      irRemote.resume();
+
+    }
   vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
@@ -269,7 +290,7 @@ void buzz(void* arg){
 void setup() {
   Serial.begin(115200);
 
-  // start ir remote
+  // enable ir remote
   irRemote.enableIRIn();
   
   // Initialize timing variable
@@ -294,7 +315,7 @@ void setup() {
   lcd.setBacklight(1);
 
   // We pin the distance task to core 0 for high speed
-  xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, &distanceTaskHandle, 0);
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
@@ -307,6 +328,11 @@ void setup() {
 
   beatTimer = timerBegin(0, 80, true);
   timerAttachInterrupt(beatTimer, &onBeatTimer, true);
+
+  // turn on + configure timer 1
+  timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
+  timerAttachInterrupt(timer1, &onTimer1);
+  timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
