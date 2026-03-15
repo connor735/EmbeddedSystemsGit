@@ -65,9 +65,6 @@ const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 volatile uint32_t lastInterruptTime = 0;
 volatile bool clapDetected = false;
 
-hw_timer_t *beatTimer = NULL;
-volatile bool beatFlag = false;
-
 // timer1 variables
 hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
@@ -118,10 +115,6 @@ void IRAM_ATTR handleClap() {
   lastInterruptTime = now;
   
   clapDetected = true;
-}
-
-void IRAM_ATTR onBeatTimer() {
-  beatFlag = true;
 }
 
 void updateLCD(void* arg) {
@@ -220,8 +213,6 @@ void buzz(void* arg){
   int oldFrequency = 0;
   TickType_t lastBeatTime = xTaskGetTickCount();
 
-  ledcAttach(BUZZER_PIN, frequency, 6);
-
   for(;;) {
     if (MODE == CLAP_MODE) {
       if (clapDetected) {
@@ -229,9 +220,6 @@ void buzz(void* arg){
         uint32_t clapTime = millis();
         uint32_t diff = clapTime - previousClapTime;
 
-        Serial.print("Test");
-        Serial.print("Diff : ");
-        Serial.println(diff);
 
         if (diff > 300 && diff < 2000) {
           currentBPM = 60000 / diff;
@@ -240,22 +228,43 @@ void buzz(void* arg){
         previousClapTime = clapTime;
 
         if (currentBPM > 0) {
-          uint32_t interval_us = 60000000 / currentBPM;
-
-          timerAlarmWrite(beatTimer, interval_us, true);
-          timerAlarmEnable(beatTimer);
+          lastBeatTime = millis();
         }
 
         int bpm = currentBPM;
         xQueueSend(bpmQueue, &bpm, 0);
       } 
-      if (beatFlag) {
-        beatFlag = false;
+      if (currentBPM > 0) {
+        uint32_t interval_ms = 60000 / currentBPM; 
 
-        ledcChangeFrequency(BUZZER_PIN, 150, 6);
-        ledcWrite(BUZZER_PIN, 127);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        ledcWrite(BUZZER_PIN, 0);
+        uint32_t timeDiff = millis() - lastBeatTime;
+        Serial.println(timeDiff);
+        if (millis() - lastBeatTime >= interval_ms) {
+          Serial.print("BUZZ");
+          lastBeatTime = millis();
+
+          // // LOW FREQUENCY
+          // ledcChangeFrequency(BUZZER_PIN, 500, RESOLUTION);
+          // // Start the sound
+          // ledcWrite(BUZZER_PIN, 127);
+          // delay(300);
+
+          // // MID FREQUENCY
+          // ledcChangeFrequency(BUZZER_PIN, 1000, RESOLUTION);
+          // delay(300);
+
+          // // HIGH FREQUENCY
+          // ledcChangeFrequency(BUZZER_PIN, 2000, RESOLUTION);
+          // delay(300);
+          
+          // // Stop the sound
+          // ledcWrite(BUZZER_PIN, 0);
+
+          ledcChangeFrequency(BUZZER_PIN, 150, 8);
+          ledcWrite(BUZZER_PIN, 127);
+          vTaskDelay(pdMS_TO_TICKS(50));
+          ledcWrite(BUZZER_PIN, 0);
+        }
       }
     } else if (MODE == KEY_MODE) {
       // Wait until you receive the next distance measurement
@@ -326,13 +335,12 @@ void setup() {
   // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
 
-  beatTimer = timerBegin(0, 80, true);
-  timerAttachInterrupt(beatTimer, &onBeatTimer, true);
-
   // turn on + configure timer 1
   timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
   timerAttachInterrupt(timer1, &onTimer1);
   timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
+
+  ledcAttach(BUZZER_PIN, 1000, 8);
   
   // Attach interrupt LAST after everything is initialized
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
