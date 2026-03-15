@@ -89,7 +89,7 @@ TaskHandle_t lcdTaskHandle = NULL;
 
 
 /**
-* @brief interrupt triggered by hardware timer
+* @brief interrupt triggered by hardware timer1
 *
 * This interrupt is triggered every 20ms by the hardware timer(timer1)
 * It tells the freeRTOS, get distance task to run
@@ -98,6 +98,20 @@ TaskHandle_t lcdTaskHandle = NULL;
 void IRAM_ATTR onTimer1() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+
+/**
+ * @brief Interrupt triggered by the LCD hardware timer.
+ *
+ * Interrupt tells the lcd screen to refresh 
+ * 
+ */
+void IRAM_ATTR onLcdTimer() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(lcdTaskHandle, &xHigherPriorityTaskWoken);
   if (xHigherPriorityTaskWoken) {
     portYIELD_FROM_ISR();
   }
@@ -155,6 +169,7 @@ void updateLCD(void* arg) {
   int receivedBPM = 0;
 
   for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     bool update = false;
 
     while (xQueueReceive(frequencyQueue, &tempFreq, 0) == pdPASS) {
@@ -187,8 +202,6 @@ void updateLCD(void* arg) {
       lcd.setCursor(0, 1);
       lcd.print(s2);
     }
-
-    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
@@ -348,7 +361,7 @@ void setup() {
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
-  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, &lcdTaskHandle, 1);
 
   // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
@@ -357,6 +370,11 @@ void setup() {
   timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
   timerAttachInterrupt(timer1, &onTimer1);
   timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
+
+  // turn on + configure LCD timer
+  lcdTimer = timerBegin(20);              // 20 Hz timer = 50 ms period
+  timerAttachInterrupt(lcdTimer, &onLcdTimer);
+  timerAlarm(lcdTimer, 1, true, 0);       // interrupt every timer tick
 
   ledcAttach(BUZZER_PIN, 1000, 8);
   
