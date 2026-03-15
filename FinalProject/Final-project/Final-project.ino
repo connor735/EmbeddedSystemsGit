@@ -329,50 +329,47 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  //cPin modes
+  // Pin modes
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
   pinMode(IR_RECEIVER_PIN, INPUT);
 
+  // Initialize queues
   distanceQueue = xQueueCreate(5, sizeof(float));
   bpmQueue = xQueueCreate(5, sizeof(int));
   frequencyQueue = xQueueCreate(5, sizeof(int));
 
-  lcd.setBacklight(1);
-
   // We pin the distance task to core 0 for high speed
   xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, &distanceTaskHandle, 0);
-
-  // Pin to core 1 because it is not as sensitive as the distance measurement
+  // Pin buzz to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
-
-  // Pin to core 1 because it is not as sensitive as the distance measurement
+  // Pin LCD update to core 1
   xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, &lcdTaskHandle, 1);
-
-  // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
+  // Pin ir reciever task to core 1
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
 
-  // turn on + configure timer 1
+  // Turn on + configure timer 1
   timer1 = timerBegin(50000);              
   timerAttachInterrupt(timer1, &onTimer1);
   timerAlarm(timer1, 1000, true, 0);      // timer for task running a 50Hz
 
-  // turn on + configure LCD timer
+  // Turn on + configure LCD timer
   lcdTimer = timerBegin(1000);
   timerAttachInterrupt(lcdTimer, &onLcdTimer);
   timerAlarm(lcdTimer, 31, true, 0);       // timer for task running at 32Hz
 
+  // Initialize buzzer
   ledcAttach(BUZZER_PIN, 1000, 8);
 
+  // Set and send default BPM
   currentBPM = 120;
   int defaultBPM = currentBPM;
   xQueueSend(bpmQueue, &defaultBPM, 0);
   
-  // Attach interrupt LAST after everything is initialized
+  // Attach clap interrupt
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
 }
 
 void loop() {
-
 }
