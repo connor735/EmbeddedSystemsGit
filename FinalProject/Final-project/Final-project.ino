@@ -83,6 +83,10 @@ volatile bool clapDetected = false;
 hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
 
+/// @brief hardware timer used to trigger LCD updates
+hw_timer_t *lcdTimer = NULL;
+TaskHandle_t lcdTaskHandle = NULL;
+
 
 /**
 * @brief interrupt triggered by hardware timer
@@ -204,10 +208,10 @@ void irReciever(void* arg){
         irUpdate = true;
       }
 
-      if(MODE == KEY_MODE && results.value == 0xFF6897){ //if in key mode and * pressed then enter synth mode
+      if(MODE == KEY_MODE && results.value == 0xFF38C7){ //if in piano mode and ok pressed then enter synth mode
         buzzerMode = BUZZER_SYNTH_MODE;
         irUpdate = true;
-      } else if(MODE == KEY_MODE && results.value == 0xFF38C7){ // if in synth mode and ok pressed then enter key mode
+      } else if(MODE == KEY_MODE && results.value == 0xFF38C7){ // if in synth mode and ok pressed then enter piano mode
         buzzerMode = BUZZER_PIANO_MODE;
         irUpdate = true;
       }
