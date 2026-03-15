@@ -1,10 +1,20 @@
+/**Final-project.ino
+ * @file   Final-project.ino
+ * @author    Connor Roane, Louis Bernard
+ * @date      15-March-2026
+ * @brief   electronic musical instrument
+ *   
+ * Electronic Musical Instrument, takes distance input as well as sound input to control a buzzer
+ */
+
+/// @brief library includes
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <IRremoteESP8266.h>
 #include <IRrecv.h>
 #include <IRutils.h>
 
-
+/// @brief pin defines
 #define IR_RECEIVER_PIN 3
 #define TRIG_PIN 4
 #define ECHO_PIN 5
@@ -21,8 +31,7 @@
 /// @brief I2C address of the LCD module
 #define LCD_ADDR 0x27
 
-// Macros for bitwise operations
-/// @brief Bit mask to enable data transmission of the LCD
+/// @brief Macros for bitwise operations, Bit mask to enable data transmission of the LCD
 #define ENABLE 0x04
 /// @brief Bit mask to enable backlight of the LCD
 #define BACKLIGHT 0x08
@@ -31,6 +40,7 @@
 /// @brief Bit mask to send a command
 #define CMD_MODE 0x00
 
+/// @brief mode value defines
 #define CLAP_MODE 1
 #define KEY_MODE 2
 #define RESET_MODE 0
@@ -45,31 +55,39 @@ decode_results results;
 /// @brief LCD object configured using I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
+/// @brief handClap variable initialization
 volatile unsigned long previousClap;
 volatile unsigned int currentBPM;
-volatile unsigned int MODE = CLAP_MODE;
 
+/// @brief setting base modes
+volatile unsigned int MODE = CLAP_MODE;
 volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
 
-const TickType_t distanceFrequency = pdMS_TO_TICKS(20);
-
-// Queue handling to send data between tasks
+/// @brief Queue handling to send data between tasks
 QueueHandle_t distanceQueue;
 QueueHandle_t bpmQueue;
 QueueHandle_t frequencyQueue;
 
-// C4, D4, E4, F4, G4, A4, B4, C5
+/// @brief piano notes C4, D4, E4, F4, G4, A4, B4, C5
 const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
 const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 
+/// @brief interrupt variables
 volatile uint32_t lastInterruptTime = 0;
 volatile bool clapDetected = false;
 
-// timer1 variables
+/// @brief timer1 (for getdistance function)
 hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
 
-// timer1 interrupt to run get distance
+
+/**
+* @brief interrupt triggered by hardware timer
+*
+* This interrupt is triggered every 20ms by the hardware timer(timer1)
+* It tells the freeRTOS, get distance task to run
+* no returns and no parameters
+*/
 void IRAM_ATTR onTimer1() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
@@ -78,6 +96,13 @@ void IRAM_ATTR onTimer1() {
   }
 }
 
+/**
+* @brief gets the distance measured by the ultrasonic distance sensor
+*
+* When triggered by the interrupt, every 20 ms, it gets the distance from the ultrasonic sensor
+* This data is then sent to a queue for buzz and updateLCD functions
+* Returns nothing, pointers to arguments not used
+*/
 void getDistance(void* arg) {
 
   for(;;) {
