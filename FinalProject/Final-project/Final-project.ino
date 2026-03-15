@@ -174,9 +174,9 @@ void irReciever(void* arg){
     }
 
     if(MODE == KEY_MODE && results.value == 0xFF10EF){ //if in key mode and press left arrow then enter piano mode
-      buzzer_mode = BUZZER_PIANO_MODE;
+      buzzerMode = BUZZER_PIANO_MODE;
     } else if(MODE == KEY_MODE && results.value == 0xFF5AA5){ // if in key mode and press right arrow then enter synth mode
-      buzzer_mode = BUZZER_SYNTH_MODE;
+      buzzerMode = BUZZER_SYNTH_MODE;
     }
 
     irRemote.resume();
