@@ -12,18 +12,13 @@
 #include <LiquidCrystal_I2C.h>
 #include <IRremoteESP8266.h>
 #include <IRrecv.h>
-#include <IRutils.h>
 
-/// @brief pin defines
+/// @brief Pin definitions
 #define IR_RECEIVER_PIN 3
 #define TRIG_PIN 4
 #define ECHO_PIN 5
 #define MICROPHONE_OUT_PIN 38
-#define SOUND_SPEED 343
 #define BUZZER_PIN 19
-
-/// @brief GPIO pin connected to the LED.
-#define LED_PIN 20
 /// @brief I2C data pin
 #define SDA_PIN 10
 /// @brief I2C clock pin
@@ -31,53 +26,22 @@
 /// @brief I2C address of the LCD module
 #define LCD_ADDR 0x27
 
-/// @brief Macros for bitwise operations, Bit mask to enable data transmission of the LCD
-#define ENABLE 0x04
-/// @brief Bit mask to enable backlight of the LCD
-#define BACKLIGHT 0x08
-/// @brief Bit mask to send data
-#define DATA_MODE 0x01
-/// @brief Bit mask to send a command
-#define CMD_MODE 0x00
+#define SOUND_SPEED 343
+#define RESOLUTION 8
 
-/// @brief mode value defines
+/// @brief Mode value defines
 #define CLAP_MODE 1
 #define KEY_MODE 2
 #define PAUSE_MODE 0
 #define BUZZER_PIANO_MODE 0
 #define BUZZER_SYNTH_MODE 1
-#define RESOLUTION 8
 
-/// @brief ir remote initialization
+/// @brief IR remote initialization
 IRrecv irRemote(IR_RECEIVER_PIN);
 decode_results results;
 
 /// @brief LCD object configured using I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-
-/// @brief handClap variable initialization
-volatile unsigned long previousClap;
-volatile unsigned int currentBPM;
-
-/// @brief setting base modes
-volatile unsigned int MODE = CLAP_MODE;
-volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
-
-/// @brief irUpdate signal
-volatile bool irUpdate = false;
-
-/// @brief Queue handling to send data between tasks
-QueueHandle_t distanceQueue;
-QueueHandle_t bpmQueue;
-QueueHandle_t frequencyQueue;
-
-/// @brief piano notes C4, D4, E4, F4, G4, A4, B4, C5
-const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
-const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
-
-/// @brief interrupt variables
-volatile uint32_t lastInterruptTime = 0;
-volatile bool clapDetected = false;
 
 /// @brief timer1 (for getdistance function)
 hw_timer_t *timer1 = NULL;
@@ -86,6 +50,26 @@ TaskHandle_t distanceTaskHandle = NULL;
 /// @brief hardware timer used to trigger LCD updates
 hw_timer_t *lcdTimer = NULL;
 TaskHandle_t lcdTaskHandle = NULL;
+
+/// @brief Queue handling to send data between tasks
+QueueHandle_t distanceQueue;
+QueueHandle_t bpmQueue;
+QueueHandle_t frequencyQueue;
+
+/// @brief current BPM value
+volatile unsigned int currentBPM;
+/// @brief Setting mode and buzzer mode
+volatile unsigned int MODE = CLAP_MODE;
+volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
+/// @brief irUpdate signal
+volatile bool irUpdate = false;
+/// @brief interrupt variables
+volatile uint32_t lastInterruptTime = 0;
+volatile bool clapDetected = false;
+
+/// @brief piano notes C4, D4, E4, F4, G4, A4, B4, C5
+const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
+const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 
 
 /**
@@ -296,23 +280,6 @@ void buzz(void* arg){
         if (millis() - lastBeatTime >= interval_ms) {
           lastBeatTime = millis();
 
-          // // LOW FREQUENCY
-          // ledcChangeFrequency(BUZZER_PIN, 500, RESOLUTION);
-          // // Start the sound
-          // ledcWrite(BUZZER_PIN, 127);
-          // delay(300);
-
-          // // MID FREQUENCY
-          // ledcChangeFrequency(BUZZER_PIN, 1000, RESOLUTION);
-          // delay(300);
-
-          // // HIGH FREQUENCY
-          // ledcChangeFrequency(BUZZER_PIN, 2000, RESOLUTION);
-          // delay(300);
-          
-          // // Stop the sound
-          // ledcWrite(BUZZER_PIN, 0);
-
           ledcChangeFrequency(BUZZER_PIN, 200, 8);
           ledcWrite(BUZZER_PIN, 127);
           vTaskDelay(pdMS_TO_TICKS(50));
@@ -354,19 +321,15 @@ void buzz(void* arg){
 void setup() {
   Serial.begin(115200);
 
-  // enable ir remote
+  // Initialize ir remote
   irRemote.enableIRIn();
-  
-  // Initialize timing variable
-  previousClap = micros();
 
+  // Initialize LCD
   Wire.begin(SDA_PIN, SCL_PIN);
   lcd.init();
   lcd.backlight();
 
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
-
+  //cPin modes
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
@@ -398,7 +361,7 @@ void setup() {
   // turn on + configure LCD timer
   lcdTimer = timerBegin(1000);              // 20 Hz timer = 50 ms period
   timerAttachInterrupt(lcdTimer, &onLcdTimer);
-  timerAlarm(lcdTimer, 50, true, 0);       // interrupt every timer tick
+  timerAlarm(lcdTimer, 31, true, 0);       // interrupt every timer tick
 
   ledcAttach(BUZZER_PIN, 1000, 8);
 
