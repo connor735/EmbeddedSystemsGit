@@ -43,7 +43,7 @@
 /// @brief mode value defines
 #define CLAP_MODE 1
 #define KEY_MODE 2
-#define RESET_MODE 0
+#define PAUSE_MODE 0
 #define BUZZER_PIANO_MODE 0
 #define BUZZER_SYNTH_MODE 1
 #define RESOLUTION 8
@@ -83,9 +83,13 @@ volatile bool clapDetected = false;
 hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
 
+/// @brief hardware timer used to trigger LCD updates
+hw_timer_t *lcdTimer = NULL;
+TaskHandle_t lcdTaskHandle = NULL;
+
 
 /**
-* @brief interrupt triggered by hardware timer
+* @brief interrupt triggered by hardware timer1
 *
 * This interrupt is triggered every 20ms by the hardware timer(timer1)
 * It tells the freeRTOS, get distance task to run
@@ -94,6 +98,20 @@ TaskHandle_t distanceTaskHandle = NULL;
 void IRAM_ATTR onTimer1() {
   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(distanceTaskHandle, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+
+/**
+ * @brief Interrupt triggered by the LCD hardware timer.
+ *
+ * Interrupt tells the lcd screen to refresh 
+ * 
+ */
+void IRAM_ATTR onLcdTimer() {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(lcdTaskHandle, &xHigherPriorityTaskWoken);
   if (xHigherPriorityTaskWoken) {
     portYIELD_FROM_ISR();
   }
@@ -155,6 +173,8 @@ void updateLCD(void* arg) {
   bool update = true;
 
   for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
     while (xQueueReceive(frequencyQueue, &tempFreq, 0) == pdPASS) {
       receivedFreq = tempFreq;
       update = true;
@@ -170,14 +190,19 @@ void updateLCD(void* arg) {
       String s2 = "";
 
       if (MODE == CLAP_MODE) {
-        s1 = String("BPM mode");
+        s1 = String("Metronome mode");
         s2 = String("Current BPM: ") + String(receivedBPM);
       } else if (MODE == KEY_MODE) {
         int index = map(receivedFreq, 262, 523, 0, 7);
         index = constrain(index, 0, 7);
         s1 = String("Key mode - ") + ((buzzerMode == BUZZER_PIANO_MODE) ? String("Piano") : String("Synth"));
         s2 = String("Key : ") + keyScale[index];
+      } else if (MODE == PAUSE_MODE) {
+        s1 = String("Pause");
+        s2 = String("");
       }
+
+      Serial.println("Here");
       
       if (s1 != prevS1) {
         lcd.setCursor(0, 0);
@@ -195,8 +220,6 @@ void updateLCD(void* arg) {
       update = false;
       irUpdate = false;
     }
-
-    vTaskDelay(pdMS_TO_TICKS(200));
   }
 }
 
@@ -209,19 +232,23 @@ void irReciever(void* arg){
         MODE = CLAP_MODE;
         irUpdate = true;
       } else if(results.value == 0xFF9867){ // if 0 pressed then enter reset mode
-        MODE = RESET_MODE;
+        MODE = PAUSE_MODE;
         irUpdate = true;
       } else if(results.value == 0xFF629D){ //if 2 pressed then enter Key mode
         MODE = KEY_MODE;
         irUpdate = true;
       }
 
-      if(MODE == KEY_MODE && results.value == 0xFF6897){ //if in key mode and * pressed then enter synth mode
-        buzzerMode = BUZZER_SYNTH_MODE;
-        irUpdate = true;
-      } else if(MODE == KEY_MODE && results.value == 0xFF38C7){ // if in synth mode and ok pressed then enter key mode
-        buzzerMode = BUZZER_PIANO_MODE;
-        irUpdate = true;
+      if(MODE == KEY_MODE && results.value == 0xFF38C7){ //if in piano mode and ok pressed then enter synth mode
+        if (buzzerMode == BUZZER_SYNTH_MODE) {
+          Serial.println("Piano");
+          buzzerMode = BUZZER_PIANO_MODE;
+          irUpdate = true;
+        } else {
+          Serial.println("Synth");
+          buzzerMode = BUZZER_SYNTH_MODE;
+          irUpdate = true;
+        }
       }
 
       irRemote.resume();
@@ -316,6 +343,8 @@ void buzz(void* arg){
           ledcWrite(BUZZER_PIN, 0);
         }
       }
+    } else {
+      ledcWrite(BUZZER_PIN, 0);
     }
     vTaskDelay(pdMS_TO_TICKS(1));
   }
@@ -356,7 +385,7 @@ void setup() {
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
 
   // Pin to core 1 because it is not as sensitive as the distance measurement
-  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, &lcdTaskHandle, 1);
 
   // pin ir reciever task to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
@@ -365,6 +394,11 @@ void setup() {
   timer1 = timerBegin(50000);              // 50 kHz timer = 20 us per tick
   timerAttachInterrupt(timer1, &onTimer1);
   timerAlarm(timer1, 1000, true, 0);      // 1000 ticks * 20 us = 20 ms
+
+  // turn on + configure LCD timer
+  lcdTimer = timerBegin(1000);              // 20 Hz timer = 50 ms period
+  timerAttachInterrupt(lcdTimer, &onLcdTimer);
+  timerAlarm(lcdTimer, 50, true, 0);       // interrupt every timer tick
 
   ledcAttach(BUZZER_PIN, 1000, 8);
 
