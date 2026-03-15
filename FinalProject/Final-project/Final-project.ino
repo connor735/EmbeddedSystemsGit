@@ -173,7 +173,7 @@ void updateLCD(void* arg) {
       } else if (MODE == KEY_MODE) {
         int index = map(receivedFreq, 262, 523, 0, 7);
         index = constrain(index, 0, 7);
-        s1 = String("Key mode");
+        s1 = String("Key mode - ") + ((MODE == BUZZER_PIANO_MODE) ? String("Piano") : String("Synth"));
         s2 = String("Key : ") + keyScale[index];
       }
       
@@ -254,9 +254,7 @@ void buzz(void* arg){
         uint32_t interval_ms = 60000 / currentBPM; 
 
         uint32_t timeDiff = millis() - lastBeatTime;
-        Serial.println(timeDiff);
         if (millis() - lastBeatTime >= interval_ms) {
-          Serial.print("BUZZ");
           lastBeatTime = millis();
 
           // // LOW FREQUENCY
