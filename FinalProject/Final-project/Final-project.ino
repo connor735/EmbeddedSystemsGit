@@ -1,10 +1,20 @@
+/**Final-project.ino
+ * @file   Final-project.ino
+ * @author    Connor Roane, Louis Bernard
+ * @date      15-March-2026
+ * @brief   electronic musical instrument
+ *   
+ * Electronic Musical Instrument, takes distance input as well as sound input to control a buzzer
+ */
+
+/// @brief library includes
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <IRremoteESP8266.h>
 #include <IRrecv.h>
 #include <IRutils.h>
 
-
+/// @brief pin defines
 #define IR_RECEIVER_PIN 3
 #define TRIG_PIN 4
 #define ECHO_PIN 5
@@ -21,7 +31,7 @@
 /// @brief I2C address of the LCD module
 #define LCD_ADDR 0x27
 
-// Macros for bitwise operations
+/// @brief Macros for bitwise operations
 /// @brief Bit mask to enable data transmission of the LCD
 #define ENABLE 0x04
 /// @brief Bit mask to enable backlight of the LCD
@@ -31,6 +41,7 @@
 /// @brief Bit mask to send a command
 #define CMD_MODE 0x00
 
+/// @brief mode value defines
 #define CLAP_MODE 1
 #define KEY_MODE 2
 #define RESET_MODE 0
@@ -45,32 +56,35 @@ decode_results results;
 /// @brief LCD object configured using I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
+/// @brief handClap variable initialization
 volatile unsigned long previousClap;
 volatile unsigned int currentBPM;
-volatile unsigned int MODE = CLAP_MODE;
 
+/// @brief setting base modes
+volatile unsigned int MODE = CLAP_MODE;
 volatile unsigned int buzzerMode = BUZZER_PIANO_MODE;
 
-const TickType_t distanceFrequency = pdMS_TO_TICKS(20);
-
-// Queue handling to send data between tasks
+/// @brief Queue handling to send data between tasks
 QueueHandle_t distanceQueue;
 QueueHandle_t bpmQueue;
 QueueHandle_t frequencyQueue;
 
-// C4, D4, E4, F4, G4, A4, B4, C5
+/// @brief piano notes C4, D4, E4, F4, G4, A4, B4, C5
 const int pianoScale[] = {262, 294, 330, 349, 392, 440, 494, 523};
 const char* keyScale[] = {"C4", "D4", "E4", "F4", "G4", "A4", "B4", "C5"};
 
+/// @brief interrupt variables
 volatile uint32_t lastInterruptTime = 0;
 volatile bool clapDetected = false;
 
+/// @brief beatTimer 
 hw_timer_t *beatTimer = NULL;
 volatile bool beatFlag = false;
 
-// timer1 variables
+/// @brief timer1 (for getdistance function)
 hw_timer_t *timer1 = NULL;
 TaskHandle_t distanceTaskHandle = NULL;
+
 
 // timer1 interrupt to run get distance
 void IRAM_ATTR onTimer1() {
