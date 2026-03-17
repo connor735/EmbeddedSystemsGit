@@ -136,6 +136,12 @@ void getDistance(void* arg) {
   }
 }
 
+/**
+ * @brief function description
+ *
+ * 
+ * 
+ */
 void IRAM_ATTR handleClap() {
   if (MODE != CLAP_MODE) return;
 
@@ -147,6 +153,12 @@ void IRAM_ATTR handleClap() {
   clapDetected = true;
 }
 
+/**
+ * @brief function description
+ *
+ * 
+ * 
+ */
 void updateLCD(void* arg) {
   static String prevS1 = "";
   static String prevS2 = "";
@@ -207,7 +219,13 @@ void updateLCD(void* arg) {
   }
 }
 
-//ir receiver code
+/**
+ * @brief function to run the ir receiver peripheral
+ *
+ * Returns nothing, pointer to arguments not used
+ * Taking the input from the ir reciever this changes the MODE global variable
+ * 
+ */
 void irReciever(void* arg){
   while(1){
     if (irRemote.decode(&results)) {
@@ -242,8 +260,12 @@ void irReciever(void* arg){
   }
 }
 
-
-// buzzer code 
+/**
+ * @brief function description
+ *
+ * 
+ * 
+ */ 
 void buzz(void* arg){
   uint8_t clapEvent;
   uint32_t previousClapTime = 0;
@@ -317,57 +339,62 @@ void buzz(void* arg){
   }
 }
 
-
+/**
+ * @brief function description
+ *
+ * 
+ * 
+ */
 void setup() {
   Serial.begin(115200);
 
-  // Initialize ir remote
+  /// @brief Initialize ir remote
   irRemote.enableIRIn();
 
-  // Initialize LCD
+  /// @brief Initialize LCD
   Wire.begin(SDA_PIN, SCL_PIN);
   lcd.init();
   lcd.backlight();
 
-  // Pin modes
+  /// @brief Pin modes
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(MICROPHONE_OUT_PIN, INPUT);
   pinMode(IR_RECEIVER_PIN, INPUT);
 
-  // Initialize queues
+  /// @brief Initialize queues
   distanceQueue = xQueueCreate(5, sizeof(float));
   bpmQueue = xQueueCreate(5, sizeof(int));
   frequencyQueue = xQueueCreate(5, sizeof(int));
 
-  // We pin the distance task to core 0 for high speed
+  /// @brief We pin the distance task to core 0 for high speed
   xTaskCreatePinnedToCore(getDistance, "DistanceTask", 2048, NULL, 2, &distanceTaskHandle, 0);
-  // Pin buzz to core 1 because it is not as sensitive as the distance measurement
+  /// @brief Pin buzz to core 1 because it is not as sensitive as the distance measurement
   xTaskCreatePinnedToCore(buzz, "BuzzTask", 4096, NULL, 1, NULL, 1);  
-  // Pin LCD update to core 1
+  /// @brief Pin LCD update to core 1
   xTaskCreatePinnedToCore(updateLCD, "UpdateLCD", 4096, NULL, 1, &lcdTaskHandle, 1);
-  // Pin ir reciever task to core 1
+  /// @brief Pin ir reciever task to core 1
   xTaskCreatePinnedToCore(irReciever, "IRReceiver", 2048, NULL, 1, NULL, 1);
 
-  // Turn on + configure timer 1
+  /// @brief Turn on + configure timer 1
   timer1 = timerBegin(50000);              
   timerAttachInterrupt(timer1, &onTimer1);
   timerAlarm(timer1, 1000, true, 0);      // timer for task running a 50Hz
 
-  // Turn on + configure LCD timer
+  /// @brief Turn on + configure LCD timer
   lcdTimer = timerBegin(1000);
   timerAttachInterrupt(lcdTimer, &onLcdTimer);
   timerAlarm(lcdTimer, 31, true, 0);       // timer for task running at 32Hz
 
-  // Initialize buzzer
+  /// @brief Initialize buzzer
   ledcAttach(BUZZER_PIN, 1000, 8);
 
-  // Set and send default BPM
+  /// @brief Set and send default BPM
   currentBPM = 120;
   int defaultBPM = currentBPM;
   xQueueSend(bpmQueue, &defaultBPM, 0);
   
-  // Attach clap interrupt
+  /// @brief Attach clap interrupt
   attachInterrupt(digitalPinToInterrupt(MICROPHONE_OUT_PIN), handleClap, FALLING);
 }
 
