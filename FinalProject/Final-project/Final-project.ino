@@ -139,7 +139,7 @@ void getDistance(void* arg) {
 /**
  * @brief function description
  *
- * 
+ *  
  * 
  */
 void IRAM_ATTR handleClap() {
@@ -154,10 +154,10 @@ void IRAM_ATTR handleClap() {
 }
 
 /**
- * @brief function description
+ * @brief updates the LCD screen with the latest information
  *
- * 
- * 
+ * No returns, argument pointer not used
+ * Displays the curent mode and the information for that mode (current bpm or note)
  */
 void updateLCD(void* arg) {
   static String prevS1 = "";
@@ -340,9 +340,9 @@ void buzz(void* arg){
 }
 
 /**
- * @brief function description
+ * @brief setup function
  *
- * 
+ * Setup all tasks, timers, ir remote, LCD display, and general peripheral pins
  * 
  */
 void setup() {
